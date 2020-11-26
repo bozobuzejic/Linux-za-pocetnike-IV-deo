@@ -14,10 +14,9 @@ NAPOMENA:
 
 *Kompletan kurs je podeljen u 4 velika direktorijuma (Linux-kurs I deo, Linux-kurs II deo, Linux-kurs III deo i Linux-kurs IV deo) koji su tako dati i u GitHub-u pa ih je potrebno redom download-ovati.
 
-*Kreirati folder Linux-kurs i u njega smestiti sve snimljene foldere sa dokumentima nakon izvršenog download-a.
-
-*Unutar foldera Linux_kurs naći će se pod-folderi poredjani po logickim celinama.
+*Kreirati folder Linux-kurs i u njega smestiti pojedinačno sve snimljene foldere sa dokumentima iz svakog od 4 velika direktorijuma.(Unutar foldera Linux_kurs naci će se pod-folderi poredjani po logickim celinama.)
 
 *U folder Linux-kurs snimiti i fajl SADRŽAJ.md koji sadrži linkove ka svakom direktorijumu i dokumentu ponaosob.
 
 *Preporuka: Držati se datog redosleda.
+
