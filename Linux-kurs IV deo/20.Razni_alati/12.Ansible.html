@@ -1,0 +1,1049 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><title></title></head><body><p>ANSIBLE</p>
+
+<p>Ansible je alat za automatizaciju zadataka na udaljenim serverima.</p>
+
+<p>Izvodi se na lokalnoj mašini koju povezujemo sa serverima putem ssh-a i izvršavamo zadatke bez instaliranja &ldquo;agenta&rdquo; na serverima.</p>
+
+<p>Postoji mnogo modula kojim izvršavamo zadatke kao što su kreiranje korisnika i grupa, instaliranja programa, kopiranja fajlova itd. </p>
+
+<pre><code>  Napomena: Svi prikazani primeri su rađeni na virtuelnim mašinama u VirtualBox-u (neke su kreirane Vagrant command-line alatom)
+            Na mašinama bi trebalo da su intalirani ssh servis, python3 i vim, podešena statička ip adresa, omogućeni portovi 
+            za ssh, http (22, 80 i drugi) u firewall-u.
+            Struktura se sastoji od master mašine i klijenata.
+
+ -Master (lokalna, kontrolna mašina koja upravlja mnoštvom udaljenih računara, klijenata preko ssh protokola): debianbb - Debian10 (sa GUI)
+
+ -Clients (udaljeni računari kojima se upravlja sa mastera): web - CentOS8 (bez GUI); db - CentOS8 (bez GUI); share - CentOS8 (bez GUI)
+
+
+       debianbb:      ip a                                                                           
+                      192.168.0.200                                                                     .....proverimo ip adresu master servera          
+       web:           ip a 
+                      192.168.0.197
+       db:            ip a
+                      192.168.0.198                                                                                 
+       share:         ip a 
+                      192.168.0.199                                                                     .....proverimo ip adrese klijenata                                                       
+
+
+      *Na masteru:
+
+       sudo apt-get update
+       sudo apt-get install software-properties-common
+       sudo apt-add-repository ppa:ansible/ansible
+       sudo apt-get update
+       sudo apt-get install ansible
+       sudo apt-get install python3                                                                     .....instaliramo potrebne aplikacije
+
+       (sudo yum install epel-release
+        sudo yum install -y ansible                                                                     .....instaliranje na centos sistemima)
+
+       ssh vagrant@192.168.0.197                                                                        .....obavezno se sa mastera konektujemo na svakog 
+       ssh vagrant@192.168.0.198                                                                             klijenta zbog autentifikacije
+       ssh vagrant@192.168.0.199
+       ssh vagrant@192.168.0.35
+
+
+       Dva osnovna ansible fajla preko kojih izvršavamo zadatke sa mastera na klijentima su:
+
+       -Inventory:  /etc/ansible/hosts                                                                  .....inventory fajl sadrži spisak klijenata
+       -Playbook:   /___/___/nekinaziv.yml                                                              .....fajl sa zadacima koje ansible izvršava na 
+                                                                                                             hostovima navedenim u inventory fajlu
+
+      *Na klijentima (CentOS8 mašine) :
+
+       sudo yum install -y epel-release
+       sudo yum update
+       sudo yum install python3                                                                         .....instaliramo potrebne aplikacije
+
+
+
+
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~VEŽBA 1~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+  ** INVENTORY FILE (default datoteka inventara - datoteka hosta - /etc/ansible/hosts)           
+
+       sudo vim /etc/ansible/hosts                                                                      .....otvorimo fajl za konfigurisanje mašina 
+            ...                                                                                              klijenata (inventory file)
+            ...
+            [webservers]
+            web1 ansible_host=192.168.0.197 ansible_ssh_user=root ansible_ssh_pass=nekipassword ansible_python_interpreter=python3       .....mašina web,
+                                                                                                                                              user: root         
+            web2 ansible_host=192.168.0.198 ansible_ssh_user=vagrant ansible_ssh_pass=nekipassword ansible_python_interpreter=python3    .....mašina db, 
+            ...                                                                                                                               user: vagrant
+            ...
+            [sharesrvers]
+            share1 ansible_host=192.168.0.199 ansible_ssh_user=vagrant ansible_ssh_pass=password ansible_python_interpreter=python3      .....mašina share, 
+            ...                                                                                                                               user: vagrant
+            ...
+
+
+    Proba sa ad-hoc naredbom: 
+
+            ansible -i /etc/ansible/hosts all -m yum -a &#39;name=wget state=present&#39;                       .....instaliramo wget aplikaciju na webserverima
+
+
+
+     Napomena 1: Default datoteka inventara (/etc/ansible/hosts) sadrži popis servera podeljenih u grupe sa detaljima za svaki server kao što su 
+                 IP adresa, user, password itd. Odrednice kao što su ansible_ssh_user ne moraju biti unete u inventory (hosts) fajl ali se tada 
+                 ad-hoc naredbi za izvršenje nekog zadatka dodaje -b (daje ovlašćenja korisniku na udaljenom računaru) 
+             |   i -K (dodeljuje sudo prava korisniku na udaljenom računaru: tad unosimo password prilikom izvršenja naredbe)
+             |    
+             |-&gt; Primer:
+
+                 sudo vim /etc/ansible/hosts                                                            .....otvorimo fajl za konfigurisanje mašina 
+                 ...                                                                                         klijenata (inventory file)
+                 ...
+                 [webservers]            
+                 webgate ansible_host=192.168.0.196 ansible_python_interpreter=python3                  .....upišemo ime i adresu udaljenog računara                                                                                     
+                 ...                                                                                         (bez imena usera i passworda) komanda će biti:
+
+                 ansible all -m yum -a &#39;name=ncdu state=present&#39; -b -K                                       .....naredba prilikom izvršenja zahteva da
+                                                                                                                  unesemo password za usera udaljenog sistema
+
+
+
+  ** Ansible ad-hoc commands (komande koje se zadaju tokom tekuće sesije: ad-hoc)
+
+      ansible all -m ping                                                               .....sa master mašine šaljemo komandu ping svim mašinama u mreži
+         web1 | SUCCESS =&gt; {
+             &quot;changed&quot;: false,
+             &quot;ping&quot;: &quot;pong&quot;
+         }
+         web2 | SUCCESS =&gt; {
+             &quot;changed&quot;: false,
+             &quot;ping&quot;: &quot;pong&quot;
+         }                                                                                   .....odgovor sa svake mašine, pojedinačno
+         share1 | SUCCESS =&gt; {
+             &quot;changed&quot;: false,
+             &quot;ping&quot;: &quot;pong&quot;
+         }
+
+
+      ansible /etc/ansible/hosts all -m ping --limit web1                               .....sa master mašine šaljemo komandu ping samo mašini web1 u mreži
+      ili
+      ansible web1 -m ping
+
+
+      ansible all -m copy -a &quot;src=/root/testansible/testfile dest=/tmp/&quot;                .....sa master-a šaljemo naredbu da se kopira fajl testfile na svim
+         web1 | CHANGED =&gt; {                                                                 mašinama
+             &quot;changed&quot;: true,
+             &quot;checksum&quot;: &quot;4b77df205f52158a6307ed5f89f97ac25372dafb&quot;,
+             &quot;dest&quot;: &quot;/tmp/testfile&quot;,
+             &quot;gid&quot;: 0,
+             &quot;group&quot;: &quot;root&quot;,
+             &quot;md5sum&quot;: &quot;8d7b9b8ed777e5892d4dc37860d403e6&quot;,
+             &quot;mode&quot;: &quot;0644&quot;,
+             &quot;owner&quot;: &quot;root&quot;,
+             &quot;secontext&quot;: &quot;unconfined_u:object_r:admin_home_t:s0&quot;,
+             &quot;size&quot;: 33,
+             &quot;src&quot;: &quot;/root/.ansible/tmp/ansible-tmp-1614023648.172932-170837201178363/source&quot;,
+             &quot;state&quot;: &quot;file&quot;,
+             &quot;uid&quot;: 0
+         }
+         web2 | CHANGED =&gt; {
+         .............    
+         }
+         shatre1 | CHANGED =&gt; {
+         .............
+         }
+
+
+      ansible all -m copy -a &quot;src=/root/testansible/testfile dest=/tmp/&quot; --limit web2             .....sa master-a šaljemo naredbu da se kopira fajl  
+                                                                                                       testfile na udaljenu mašinu web2 (192.168.0.198)
+
+      ansible webgate -m command -a &quot;cp /home/user/Downloads/test.txt /home/user/Documents&quot;       .....sa master-a šaljemo naredbu da se na udaljenoj mašini 
+                                                                                                       kopira fajl test.txt iz foldera Downloads u folder 
+                                                                                                       Documents
+      ansible webgate -m command -a &quot;mv /home/user/Documents/test.txt /home/user&quot;                 .....sa master-a šaljemo naredbu da se na udaljenoj mašini 
+                                                                                                       pomeri fajl test.txt iz foldera Documents u folder 
+                                                                                                       user
+      ansible webservers -m file -a &quot;dest=/home/vagrant/test mode=777 owner=vagrant group=vagrant state=directory&quot; .....na mašinama u grupi webservers kreiramo
+                                                                                                                        folder test sa naznačenim parametrima
+
+      ansible web1 -m file -a &quot;dest=/home/vagrant/test state=absent&quot;                              .....sa udaljene mašine web1 brišemo folder test
+
+
+      ansible webgate -m command -a &quot;ls -la /home/user&quot;                                           .....izlistava sadržaj user foldera na udaljenoj mašini
+                                                                                                       webgate
+
+      ansible webservers -m command -a &quot;ls -la /home/user&quot;                                        .....izlistava sadržaj user foldera na udaljenim mašinama                                                             
+                                                                                                       webservers grupe
+
+
+
+      ansible all -m yum -a &#39;name=ncdu state=present&#39;                                             .....sa master-a šaljemo naredbu da se instalira ncdu                                    
+         share2 | FAILED! =&gt; {                                                                         program na svim mašinama
+             &quot;ansible_facts&quot;: {
+                 &quot;pkg_mgr&quot;: &quot;dnf&quot;
+             },
+             &quot;changed&quot;: false,
+             &quot;msg&quot;: &quot;This command has to be run under the root user.&quot;,
+             &quot;results&quot;: []                                                                             .....instalacija nije uspela na mašini share1
+         }                                                                                                  jer user mašine nije root user na inventory fajlu
+         web2 | FAILED! =&gt; {                                                                         
+             &quot;ansible_facts&quot;: {
+                 &quot;pkg_mgr&quot;: &quot;dnf&quot;
+             },
+             &quot;changed&quot;: false,
+             &quot;msg&quot;: &quot;This command has to be run under the root user.&quot;,
+             &quot;results&quot;: []                                                                             .....instalacija nije uspela na mašini web2
+         }                                                                                                  jer user mašine nije root user na inventory fajlu 
+         web1 | CHANGED =&gt; {                               
+             &quot;ansible_facts&quot;: {
+                 &quot;pkg_mgr&quot;: &quot;dnf&quot;
+             },
+         &quot;changed&quot;: true,
+         &quot;msg&quot;: &quot;&quot;,
+         &quot;rc&quot;: 0,
+         &quot;results&quot;: [
+             &quot;Installed: ncdu&quot;,
+         &quot;Installed: ncdu-1.15.1-1.el8.x86_64&quot;
+             ]                                                                                         .....instalacija je uspela na mašini web1 
+         }                                                                                                  jer je user mašine root user na inventory fajlu
+
+
+      ansible all -m yum -a &#39;name=ncdu state=present&#39; --limit web2 -b --become-user=root          .....sa master-a šaljemo naredbu da se instalira ncdu 
+         wget2 | CHANGED =&gt; {                                                                          program na wget2 (192.168.0.198) sa pribavljenim
+             &quot;ansible_facts&quot;: {                                                                        root ovlašćenjima (-b prenosi ovlašćenja a
+                 &quot;pkg_mgr&quot;: &quot;dnf&quot;                                                                      --become-user=root kaže da se ovlašćenja prenose na root)
+             },
+             &quot;changed&quot;: true,
+             &quot;msg&quot;: &quot;&quot;,
+             &quot;rc&quot;: 0,nginx_role
+             &quot;results&quot;: [
+         &quot;Installed: ncdu&quot;,
+         &quot;Installed: ncdu-1.15.1-1.el8.x86_64&quot;
+             ]
+         }
+
+
+      ansible all -m yum -a &#39;name=wget state=present&#39; --limit share1 -b --become-user=root       .....sa master-a šaljemo naredbu da se instalira wget 
+                                                                                                      program na share1 (192.168.0.199) sa pribavljenim 
+                                                                                                      root ovlašćenjima (-b prenosi ovlašćenja a 
+                                                                                                      --become-user=root kaže da se ovlašćenja prenose na root)
+
+      ansible all -m yum -a &#39;name=ncdu state=absent&#39; --limit share1 -b --become-user=root        .....deinstaliramo ncdu program sa share1 mašine
+
+
+
+      ansible all -m shell -a &quot;cat /etc/passwd|grep -i vagrant&quot; -s --ask-sudo-pass                .....metoda na starijim verzijama ansible za pokretanje 
+         web1 | CHANGED | rc=0 &gt;&gt;                                                                      sa sudo privilegijama na svim mašinama uz password
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash                                                          
+
+         web2 | CHANGED | rc=0 &gt;&gt;
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash
+
+         share1 | CHANGED | rc=0 &gt;&gt;
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash
+
+
+
+      ansible all -m shell -a &quot;cat /etc/passwd|grep -i vagrant&quot; -s --ask-sudo-pass --limit web2        .....metoda na starijim verzijama ansible za pokretanje 
+         SUDO password: password                                                                            sa sudo privilegijama samo na mašini web2
+         web2 | CHANGED | rc=0 &gt;&gt;                                                                           
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash                                                        
+
+
+      ansible all -m shell -a &quot;cat /etc/passwd|grep -i vagrant&quot; -b -K                                  .....nova metoda za pokretanje sa sudo privilegijama
+         SUDO password: password                                                                            uz password (izlistava liniju iz passwd fajla za 
+                                                                                                            usera vagrant na svim mašinama)
+
+
+      ansible share1 -m shell -a &quot;cat /etc/passwd|grep -i vagrant&quot;                                     .....izlistava liniju iz passwd fajla za usera vagrant
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash                                                       na share1 mašini
+
+
+      ansible webservers -m shell -a &quot;cat /etc/passwd|grep -i vagrant&quot;                                 .....izlistava liniju iz passwd fajla za usera vagrant                        
+         web1 | CHANGED | rc=0 &gt;&gt;                                                                           na mašinama u grupi webservers (iz inventory fajla)
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash
+
+         web2 | CHANGED | rc=0 &gt;&gt;
+         vagrant:x:1000:1000::/home/vagrant:/bin/bash
+
+
+
+
+     ansible all -m yum -a &#39;name=wget state=present&#39; --limit share1                                    .....na mašinu share1 instaliramo wget aplikaciju
+
+     ansible webservers -m yum -a &quot;name=httpd state=absent&quot;                                            .....sa mašina u grupi webservers deinstaliramo httpd
+                                                                                                            servis
+
+
+ ** PLAYBOOK FILE (skripte za slanje naredbi udaljenim sistemima) 
+    Ansible playbook: skripta koja sadrži sve zadatke koje treba izvršiti sa svim elementima potrebnim za izvršavanje zadataka.
+
+       sudo mkdir /home/user/ansibletest                                                                .....kreiramo folder za ansible-playbook skripte
+
+       sudo vim /home/user/ansibletest/test.yml                                                         .....kreiramo 2 skripte (.yml fajlove) kojima određujemo
+           ---                                                                                               zadatke koji će se izvršavati na klijentima
+           - name: test book                                                                                           
+             hosts: webservers
+             remote_user: root
+             become: true                                                                                    .....become obezbeđuje izvršenje zadataka sa sudo i
+             tasks:                                                                                               su privilegijama
+               - name: install httpd
+                 yum:
+                       name: httpd
+                       state: latest
+               - name: run httpd
+                 service:
+                       name: httpd
+                       state: started
+               - name: enable httpd
+                 service:
+                       name: httpd
+                       enabled: yes        
+               - name: create content
+                 copy:
+                       content: &quot;Čestitamo, instalirali ste ansible&quot;
+                       dest: /var/www/html/index.html
+
+       sudo vim /home/user/ansibletest/test2.yml
+           ---
+           - name: test book
+             hosts: webservers 
+             remote_user: vagrant
+             become: true
+             tasks: 
+               - name: install httpd
+                 yum:
+                       name: httpd
+                       state: latest
+               - name: run httpd
+                 service:
+                       name: httpd
+                       state: started
+               - name: create content
+                 copy:
+                       content: &quot;Čestitamo, instalirali ste ansible na drugoj mašini&quot;
+                       dest: /var/www/html/index.html
+
+
+       sudo vim /home/user/ansibletest/test3.yml           
+           ---
+           - hosts: shareservers
+             remote_user: vagrant
+             become: true
+             tasks:
+               - name: install lldpad package
+                 yum:
+                       name: lldpad
+                       state: latest
+               - name: check lldpad service status
+                 service:
+                       name: lldpad
+                       state: started
+
+
+
+       ansible-playbook /home/user/ansibletest/test.yml --syntax-check                                  .....čekiramo sintaksu fajlova sa zadacima 
+          playbook: test.yml
+       ansible-playbook /home/user/ansibletest/test2.yml --syntax-check
+          playbook: test2.yml
+
+       ansible-playbook /home/user/ansibletest/test.yml                                                 .....pokrećemo ansible da izvrši zadatke za klijenta
+                                                                                                             web1 (192.168.0.197)
+       ansible-playbook /home/user/ansibletest/test2.yml                                                .....pokrećemo ansible da izvrši zadatke za klijenta
+                                                                                                             web2 (192.168.0.198)                                                                                                       
+
+
+    - Provera na klijentima:
+
+       sudo systemctl status httpd
+
+
+    - Provera sa nekog računara u mreži:    
+
+       Web browser -&gt; http://192.168.0.197 -&gt; enter
+                      Čestitamo, instalirali ste ansible
+       Web browser -&gt; http://192.168.0.198 -&gt; enter
+                      Čestitamo, instalirali ste ansible na drugoj mašini    
+
+
+
+ ** ROLES - Ansible roles čini zbir zadataka koji se mogu premeštati iz jedne pleybook u drugu, mogu se izvoditi samostalno (ali samo preko playbook fajla)
+    Asible roles (uloge) automatski određuju var fajlove, zadatake i nosioce procesa na unapred poznatoj strukturi foldera i fajlova.
+    Ansible uloge se koriste za pojednostavljivanje Ansible playbook-a (playbook možemo rastaviti na više pojedinačnih uloga koje su višekratne i nezavisne
+    jedna od druge).
+
+    Ansible traži uloge na dve lokacije: /etc/ansible/roles ili u drugom folderu roles s tim da u fajlu kojim se pokreću uloge mora biti navedema
+    kvalifikovana putanja do napisanih rola.
+
+    U Ansible je uključen Ansible Galaxy: besplatna web platforma za pronalaženje, preuzimanje, pregledanje i deljenje svih vrsta uloga.
+    Ansible Galaxy omogućuje preuzimanje uloga i daje okvir za kreiranje sopstvenih uloga u unapred struktuiranom direktorijumu.
+
+
+  Primer 1:
+
+
+   Napomena: Prvo u /etc/ansible/hosts fajlu (inventory fajl) definšemo grupe udaljenih servera kojima sa mastera, preko ansible, šaljemo zadatke 
+
+
+      ansible-galaxy init /home/user/roles/apache --offline              .....kreiramo stablo foldera za Ansible Roles (ulogu) pod nazivom apache 
+                                                                              (van mreže) 
+
+      tree /home/user/roles/apache                                       .....sa komandom tree izlistamo strukturu direktorijuma apache po dubini:
+      /home/user/roles/apache 
+      ├── defaults                                                            .....sadrži zadate (default) varijable za ulogu, imaju nizak prioritet
+      │   └── main.yml 
+      ├── files                                                               .....folder files sadrži statične datoteke koje se implementirati kroz uloge
+      ├── handlers                                                            .....folder hendlers sadrži obrađivače koji se, kad se zadatak izvrši, 
+      │   └── main.yml                                                             pokreće posle ključne reči navedene u notify ključu
+      ├── meta                                                                .....sadrži metapodatke o rolama uključujući zavisnosti uloga
+      │   └── main.yml 
+      ├── README.md 
+      ├── tasks                                                               .....sadrži listu zadataka koji će se izvršavati
+      │   └── main.yml 
+      ├── templates                                                           .....sadrži predloške (template) koje raspoređujemo putem ove uloge
+      ├── tests 
+      │   ├── inventory 
+      │   └── test.yml 
+      └── vars                                                                .....sadrži ostale varijable za uloge, imaju najviši nivo prvenstva
+          └── main.yml 
+
+      8 directories, 8 files
+
+  Napomena: Prema zadatim postavkama Ansible će u svakom direktorijumu unutar uloga tražiti main.yml fajl koji određuje šta se izvršava.
+            U neke foldere se mogu dodati drugi .yml fajlovi (na primer, zadaci specifični za pojedine platforme mogu se dodati u task folder: redhat.yml,
+            redhat.yml itd).
+
+
+      cd /home/user/roles/apache                                              .....premestimo se folder /home/user/roles/apache
+
+      vim tasks/main.yml                                                      .....kreiramo main.yml fajl (playbook fajla)
+          ---
+          - name: install epel
+            yum:
+                  name: epel-release
+                  state: installed
+          - name: install httpd 
+            yum: 
+                  name: httpd 
+                  state: latest
+          - name: copy index.html file
+                  copy: &quot;src=/home/user/roles/apache/files/index.html dest=/var/www/html&quot;
+          - name: run httpd
+            service:
+                  name: httpd
+                  state: started
+          - name: enable httpd
+            service:
+                  name: httpd
+                  enabled: yes                                                .....navedemo sve operacije koje će se izvoditi na klijent-serverima
+
+
+      vim files/index.html                                                    .....kreiramo index.html stranicu koju će apache server postaviti na web
+          Ovo je stranica kreirana za ansible ulogu.
+
+
+      vim handlers/main.yml                                                   .....kreiramo fajl koji će restartovati apache servis
+          ---
+          - name: restart apache
+            service: name=httpd state=restarted
+
+      vim meta/main.yml                                                       .....dodamo meta podatke u konfiguracioni playbook fajl
+         ...
+         author: XY
+         description: Apache Webserver Role
+         company: www.github.com/xyz
+         ...
+         ...
+
+      vim /home/user/runsetup.yml                                             .....kreiramo playbook pokretački fajl kojim pozivamo kreiranu ulogu 
+          ---                                                                      (u ovom slučaju obuhvata sve mašine-klijente u grupi shareservers koju smo 
+          - hosts: shareservers                                                    definisali u /etc/ansible/hosts fajlu
+            roles:
+            - apache                                                               .....sadrži kvalifikovanu putanju do napisane role 
+
+
+      ansible-playbook /home/user/runsetup.yml --syntax-check                 .....proverimo sintaksu ansible konfiguracije
+
+      ansible-playbook /home/user/runsetup.yml                                .....pokrenemo proces izvršenja predviđenih zadataka na klijentu
+
+
+
+
+ Primer 2:
+
+
+    *Inventory:
+
+      sudo vim /etc/ansible/hosts                                                                 .....otvorimo fajl za konfigurisanje mašina 
+            ...                                                                                        klijenata (inventory file)
+            ...
+            [webservers]            
+            webgate ansible_host=192.168.0.196                                                    .....upišemo ime i adresu udaljenog računara                                                                                     
+            ...                                                                                        (bez imena usera i passworda)
+
+
+    *Ansible roles:
+
+      ansible-galaxy init /home/user/roles/nginx_role                         .....kreiramo stablo foldera za Ansible Roles (ulogu) pod nazivom nginx_role
+
+      vim /home/user/roles/nginx_role/tasks/main.yml                          .....određujemo zadatke koji će se izvršavati na udaljenom računaru
+        ---
+        - name: install nginx                                                      .....zadatak: instaliranje nginx 
+          yum: name=nginx state=latest                                                  .....naredba za instalaciju poslednje verzije nginx
+        - name: copy index.html template                                           .....zadatak: kopiranje predloška (template) za index.html fajl
+          template: src=templates/index.html dest=/usr/share/nginx/html                 .....naredba za izvršenje kopiraja sa mastera na klijenta 
+          notify: restart nginx                                                         .....naredba za restart nginx
+        - name: enable and start service                                           .....zadatak: omogućiti servis pri dizanju sistema i pokrenuti ga
+          service:                                                                      .....nareba za izvršenje navedenih operacija na servisu nginx
+              name: nginx
+              enabled: yes
+              state: started
+
+
+      vim /home/user/roles/nginx_role/templates/index.html                .....kreiramo template za index.html stranicu umesto default index.html stranice
+        &lt;!DOCTYPE html&gt;
+        &lt;html&gt;
+        &lt;head&gt;
+        &lt;title&gt;Moj nginx webserver&lt;/title&gt;
+        &lt;/head&gt;
+        &lt;body&gt;&lt;h1&gt;Dobro dosli na moju {{ type_of_webserver }} stranicu 4&lt;/h1&gt;&lt;/body&gt;     .....{{ type_of_webserver }} će upisati važeću varijablu 
+        &lt;/html&gt;                                                                               koju određujemo u /home/user/roles/nginx_role/defaults/main.yml
+
+      vim /home/user/roles/nginx_role/handlers/main.yml                   .....kreiramo ulogu (fajl za obrađivača koji će restartovati nginx servis
+        - name: restart nginx service
+          service: name=nginx state=restarted
+          listen: &quot;restart nginx&quot;     
+
+
+      vim /home/user/roles/nginx_role/defaults/main.yml                   .....konfigurišemo default varijablu za tip servera (tip servera koji ovde
+        ---                                                                    odredimo će biti prikazan u index.html fajlu) 
+        type_of _webserver: Nginx                                              .....tip servera Nginx
+
+
+    *Playbook:
+
+      vim /home/user/nginxsetup.yml                                       .....kreiramo pokretački fajl kojim pozivamo kreiranu rolu 
+        ---                                                                    (u ovom slučaju obuhvata sve mašine-klijente u grupi shareservers koju smo 
+        - hosts: webservers                                                    definisali u /etc/ansible/hosts fajlu
+          become: yes
+          roles:
+          - nginx_role 
+                                                                  _ 
+          vars:                                                    |________________naknadno u playbook fajl ubacujemo varijablu kojom menjamo tip servera iz                             
+              type_of_webserver: &quot;Nginx webgate&quot;                  _|                Nginx u Nginx webgate (čime poništavamo varijablu datu u default roli) 
+
+
+      ansible-playbook /home/user/nginxsetup.yml -b -K                    .....pokretanjem playbook fajla nginxsetup.yml pokrećemo izvršenje nginx_role
+                                                                               (svih zadataka i uloga koje smo definisali u main.yml fajlovima odgovarajućih 
+                                                                               rola: tasks, templates, handlers, defaults)
+
+
+     Napomena: Na https://galaxy.ansible.com/ se može pronaći i preuzeti broj gotovih rola
+
+
+
+
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~VEŽBA 2~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  
+
+
+ -Kreiranje novog inventory fajla
+
+      mkdir -p /home/user/ansiblelab/inventory
+
+
+      vim /home/user/ansiblelab/inventory/host1
+          share ansible_host=192.168.0.199 ansible_ssh_user=vagrant ansible_ssh_pass=password ansible_python_interpreter=python3
+
+
+ -Kreiranje playbook fajla
+
+      mkdir -p /home/user/ansiblelab/playbook
+
+      vim /home/user/ansiblelab/playbook/install_to_share.yml
+          --- 
+          - hosts: share
+            become: true
+            tasks:
+                  - name: install epel
+                    yum:
+                           name: epel-release
+                           state: installed
+                  - name: install nginx
+                    yum:
+                           name: nginx
+                           state: installed
+                  - name: run nginx
+                    service:
+                           name: nginx
+                           state: started
+                  - name: enable httpd
+                    service:
+                           name: nginx
+                           enabled: yes            
+                  - name: install vsftpd
+                    yum:
+                           name: vsftpd
+                           state: installed
+                  - name: run vsftpd
+                    service:
+                           name: vsftpd
+                           state: started
+                  - name: enable vsftpd
+                    service:
+                           name: vsftpd
+                           enabled: yes             
+                  - name: install lftp
+                    yum:
+                           name: lftp
+                           state: installed          
+
+
+
+      ansible-playbook -i /home/user/ansiblelab/inventory/host1 /home/user/ansiblelab/playbook/install_to_share.yml   .....pokrenemo zadatke na share mašini  
+
+
+  Napomena: Ovaj primer pokazuje da inventory file možemo sami kreirati i smestiti u neki direktorijum ali tada u naredbi kojom je prosleđujemo 
+            ansible-u moramo navesti putanju (-i /home/user/ansiblelab/inventory/host1) kao što navodimo koji playbook fajl izvršavamo
+            (/home/user/ansiblelab/playbook/install_to_share.yml)
+
+
+
+
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~VEŽBA 3~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~     
+
+
+  Master mašina (controller): debianbb (Debian 10)
+  Klijent mašina za održavanje balansa (loadbalancer): ubuntubalance (Ubuntu 17 server)
+  Klijent Webserver mašine (webserver): web (centOS 8); db (CentOS 8) i share (CentOS 8)
+
+  Napomena: Na mašinama bi trebalo da su intalirani ssh servis, programi python3 i vim, podešena statička ip adresa, omogućeni portovi za ssh i http (22 i 80)
+            u firewall-u
+
+
+  Podešavanja:
+
+     sudo vim /etc/hosts                                   .....uredimo hosts fajl na svim mašinama kako bi se olakšala komunikacija
+          192.168.0.197 web
+          192.168.0.198 db
+          192.168.0.199 share
+          192.168.0.35  ubuntubalance
+          192.168.0.200 debianbb
+
+
+    sudo vim .ssh/config                                   .....na mašini debianbb (master) otvaramo novi fajl i upisujemo 
+                Host web                                   
+                     User vagrant                              
+                     Hostname 192.168.0.197                 
+                     Port 22                               
+                     IdentityFile ~/.ssh/id_rsa            
+                Host db                                   
+                     User vagrant                            
+                     Hostname 192.168.0.198                 
+                     Port 22                               
+                     IdentityFile ~/.ssh/id_rsa      
+                Host share                                   
+                     User vagrant                            
+                     Hostname 192.168.0.199                 
+                     Port 22                               
+                     IdentityFile ~/.ssh/id_rsa  
+                Host ubuntubalance                                   
+                     User vagrant                              
+                     Hostname 192.168.0.35                 
+                     Port 22                               
+                     IdentityFile ~/.ssh/id_rsa
+
+
+
+    ssh-keygen -t rsa                                                                  .....kreiramo ključ koji će master mašini omogućiti pristup svakoj  
+                                                                                            mašini bez zahteva za password
+    cat .ssh/id_rsa.pub|ssh vagrant@web &#39;cat &gt;&gt; .ssh/authorized_keys&#39;                  .....dostavimo javni ključ na svaku klijent mašinu pojedinačno
+    cat .ssh/id_rsa.pub|ssh vagrant@db &#39;cat &gt;&gt; .ssh/authorized_keys&#39;
+    cat .ssh/id_rsa.pub|ssh vagrant@share &#39;cat &gt;&gt; .ssh/authorized_keys&#39;
+    cat .ssh/id_rsa.pub|ssh vagrant@ubuntubalance &#39;cat &gt;&gt; .ssh/authorized_keys&#39;
+    (cat .ssh/id_rsa.pub|ssh bozo@boza &#39;cat &gt;&gt; .ssh/authorized_keys&#39;                         .....ključ za CentOS7 u VM)
+
+    ssh vagrant@web
+    ili
+    ssh web                                                                            .....sa master (debianbb) mašine se konektujemo na klijent mašine
+
+    ssh vagrant@db
+    ili
+    ssh db
+
+    ssh vagrant@share
+    ili
+    ssh share
+
+    ssh vagrant@ubuntubalance
+    ili
+    ssh ubuntubalance
+
+
+
+    INVENTORY
+
+    mkdir -p /home/user/ansiblework/{inventory,playbook)                               .....kreiramo radne foldere za ansible
+
+    vim /home/user/ansiblework/inventory/development.txt                               .....kreiramo novu listu servera (inventory fajl)
+        [controller]                                                                        .....master mašina na koju je instaliran ansible
+        debianbb ansible_connection=local
+
+        [loadbalancer]                                                                      .....mašina koja distribuira mrežni saobraćaj na više servera
+        ubuntubalance ansible_user=vagrant ansible_python_interpreter=python3
+
+        [webserver]                                                                         .....grupa mašina koje imaju funkciju webservera
+        web ansible_user=vagrant ansible_python_interpreter=python3
+        db ansible_user=vagrant ansible_python_interpreter=python3
+        share ansible_user=vagrant ansible_python_interpreter=python3
+
+    ansible -i /home/user/ansiblework/inventory/development.txt --list-hosts all       .....izlistamo hostove iz inventory fajla
+    hosts (5):
+      ubuntubalance
+      debianbb
+      web
+      db
+      share
+
+    vim /home/user/ansiblework/ansible.cfg                                             .....kreiramo novi konfiguracioni ansible.cfg fajl i upišemo putanju
+    [defaults]                                                                              do default inventory liste (development.txt) 
+    inventory = /home/user/ansiblework/inventory/development.txt
+
+    sudo vim /etc/ansible/hosts                                                        .....zakomentarišemo sve otvorene linije sa inventarom hostova
+    sudo mv /etc/ansible/ansible.cfg /etc/ansible/ansible.cfg.origin                   .....izmenimo naziv originalnog ansible.cfg fajla
+    sudo ln -s /home/user/ansiblework/ansible.cfg /etc/ansible/ansible.cfg             .....kreiramo soft link od novog ansible.cfg fajla do 
+                                                                                            /etc/ansible/ansible.cfg fajla
+    ansible --list-hosts all                                                           .....izlistamo hostove
+    hosts (5):
+      ubuntubalance
+      debianbb
+      web
+      db
+      share        
+
+    ansible --list-hosts webserver
+    hosts (2):
+      web
+      db
+      share
+
+    ansible -m ping all
+    ansible -m command -a &quot;ls&quot; all
+
+
+
+    PLAYBOOK
+
+    1.
+    sudo vim /home/user/ansiblework/playbook/start.yml                                       .....playbook skripta kojom određujemo zadatke svim mašinama
+        ---
+        - hosts: all
+          tasks:
+            - name: list files in folder
+              command: ls 
+
+    ansible-playbook /home/user/ansiblework/palybook/start.yml                               .....pokrenemo zadatak na svim mašinama 
+
+
+    2.
+    sudo vim /home/user/ansiblework/playbook/webserver.yml                                   .....playbook skripta kojom regulišemo zadatke webserverima
+        ---
+        - hosts: webserver
+          become: true
+          tasks:
+            - name: install httpd
+              yum: name=httpd state=present update_cache=yes
+            - name: deleted index.html
+              file: path=/var/www/html/index.html state=absent
+              notify: restart httpd
+          handlers:
+            - name: restart httpd
+              service: name=httpd state=restarted
+
+        - hosts: web
+          become: true
+          tasks:
+            - name: set up index.html for first web server
+              copy: content=&quot;&lt;html&gt;
+                             &lt;header&gt;&lt;title&gt;Dobro došli na webserver&lt;/title&gt;&lt;/header&gt;
+                             &lt;body&gt;Zdravo sa webservera!&lt;/body&gt;&lt;/html&gt;&quot; dest=/var/www/html/index.html mode=0644
+              notify: restart httpd
+          handlers:
+             - name: restart httpd
+               service: name=httpd state=restarted
+
+        - hosts: db
+          become: true
+          tasks:
+            - name: set up index.html for second web server
+              copy: content=&quot;&lt;html&gt;
+                             &lt;header&gt;&lt;title&gt;Dobro došli na webserver 2&lt;/title&gt;&lt;/header&gt;
+                             &lt;body&gt;Zdravo sa webservera 2!&lt;/body&gt;&lt;/html&gt;&quot; dest=/var/www/html/index.html mode=0644
+              notify: restart httpd
+          handlers:
+             - name: restart httpd
+               service: name=httpd state=restarted
+
+        - hosts: share
+          become: true
+          tasks:
+            - name: set up index.html for second web server
+              copy: content=&quot;&lt;html&gt;
+                             &lt;header&gt;&lt;title&gt;Dobro došli na webserver 3&lt;/title&gt;&lt;/header&gt;
+                             &lt;body&gt;Zdravo sa webservera share (3)!&lt;/body&gt;&lt;/html&gt;&quot; dest=/var/www/html/index.html mode=0644
+              notify: restart httpd
+          handlers:
+             - name: restart httpd
+               service: name=httpd state=restarted      
+
+
+    ansible-playbook /home/user/ansiblework/playbook/webserver.yml                           .....pokrenemo zadatke na webserverima           
+
+
+    3.
+    mkdir /home/user/ansiblework/templates                                                   .....kreiramo folder za predloške (templates)
+    sudo vim /home/usor/ansiblework/templates/nginx.conf.j2                                  .....konfigurišemo predložak za loadbalancer mašinu koji će
+          upstream test {                                                                         omogućiti kontrolu nad webserverima 
+          {% for server in groups.webserver %}
+          server {{ server }};
+          {% endfor %}
+          }
+
+          server {
+          listen 80;
+
+          location / {
+          proxy_pass http://test;
+          }
+          }
+
+    4.
+    sudo vim /home/user/ansiblework/playbook/loadbalancer.yml                               .....konfigurišemo playbook za loadbalancer (server koji distribuira 
+        ---                                                                                      mrežni saobraćaj na više servera radi rasterećenja saobraćaja);
+        - hosts: loadbalancer                                                                    loadbalancer radi sa nginx servisom
+          become: true
+          tasks:
+            - name: install nginx
+              apt: name=nginx state=present update_cache=yes
+            - name: start nginx
+              service: name=nginx state=started enabled=yes
+
+            - name: configure nginx
+              template: src=templates/nginx.conf.j2 dest=/etc/nginx/sites-available/test mode=0644
+              notify: restart nginx
+
+            - name: delete old link
+              file: path=/etc/nginx/sites-enabled/default state=absent
+              notify: restart nginx
+
+            - name: activate test site
+              file: src=/etc/nginx/sites-available/test dest=/etc/nginx/sites-enabled/test state=link
+              notify: restart nginx
+          handlers:
+            - name: restart nginx
+              service: name=nginx state=restarted
+
+
+    ansible-playbook -K /home/user/ansiblework/playbook/loadbalancer.yml                    .....pokrenemo zadatke na loadbalancer-u    
+    SUDO password: password                                                                      i unesemo password za logovanje na ubuntubalance mašinu
+
+
+
+
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~VEŽBA 4~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+
+
+
+*INVENTORY 
+
+    mkdir lab-ansible &amp;&amp; cd lab-ansible
+
+    vim ansible.cfg
+       [defaults]
+       inventory = hosts
+       host_key_checking = False
+
+    vim hosts
+       [privatelab]
+       web
+       db
+       share
+
+       [privatelab:vars]
+       ansible_connection=ssh  
+       ansible_user=vagrant 
+       ansible_ssh_pass=passwordxy
+       ansible_python_interpreter=python3
+
+
+*PLAYBOOK 1
+
+    mkpasswd -m sha-512 abbccd246
+    $6$y6V4M2tQGoEkG7$KNsZToQ7upfo9pN2Wbzk8tjfq5FRsftb2iNpXDnh51lgbsDq6F9nMb32hPStJvhheUBiG8j5Li.vLzsl.eKu50   
+
+    vim privatelab-vagrant.yml                                                  .....kreiramo playbook fajl za vagrant korisnika kojim mu menjamo password
+       ---                                                                           (dodajemo kriptovan) na svim mašinama, dodajemo SSH public key i 
+       - hosts: all                                                                  instaliramo 4 programa
+         become: &#39;yes&#39;
+         vars:
+           user:
+             - name: &quot;vagrant&quot;
+               password: &quot;passwordxy&quot;
+               ssh_key: &quot;.ssh/authorized_keys&quot;
+           packages:
+             - vim
+             - wget
+             - curl
+             - htop
+         tasks:
+           - name: Change password for default user
+             user:
+               name: &quot;vagrant&quot;
+               password: &quot;$6$y6V4M2tQGoEkG7$KNsZToQ7upfo9pN2Wbzk8tjfq5FRsftb2iNpXDnh51lgbsDq6F9nMb32hPStJvhheUBiG8j5Li.vLzsl.eKu50&quot;
+               state: present
+             loop:
+               - &quot;{{ user}} &quot;
+           - name: Add SSH public key
+             authorized_key:
+               user: &quot;vagrant&quot;
+               key: &quot;{{ lookup(&#39;file&#39;, &#39;/home/user/.ssh/id_rsa.pub&#39;) }}&quot;        
+             loop:
+               - &quot;{{ user }}&quot;
+           - name: Ensure a list of packages installed
+             yum:
+               name: &quot;{{ packages }}&quot;
+               state: present
+           - name: All done!
+             debug:
+               msg: Packages have been successfully installed           
+
+
+    ansible-playbook privatelab.yml
+
+
+
+*PLAYBOOK 2 
+
+    openssl passwd -6 bbcdd369
+    $6$VGuKcM0V/UaHrtAU$FC8Jai1vu7T8RABUbGwfStvgteZc4TAKcmSmWPvBVR9L6fiK5qWRarj47dFh5r6efylZ4evpWi44ZgTCE3yvdf
+
+    cd lab-ansible
+
+    vim create-user-centbb.yml                                                  .....izrađujemo playbook fajl kojim kreiramo korisnika centbb i dodeljujemo                                                                                                                 
+       ---                                                                           mu kriptovan password i druge atribute                  
+       - name: Create centbb user
+         hosts: all
+         become: yes
+         become_method: sudo
+         vars:
+           users:
+           - username: centbb
+             password: $6$VGuKcM0V/UaHpwAU$FC8Jai1vu7T8RABUbGwfStvVVRZc4TAKcmSmWPvBVR9L6fiK5qWRarj47dFh5r6efylZ4evpWi44ZgTCE3yyl/ 
+         tasks:
+           - name: Create user centbb
+             user:
+                 name: &quot;{{ item.username }}&quot;
+                 shell: /bin/bash
+                 createhome: yes
+                 group: wheel
+                 generate_ssh_key: yes
+                 ssh_key_bits: 2048
+                 password: &quot;{{ item.password }}&quot;
+                 update_password: always
+             with_items: &quot;{{ users }}&quot;  
+
+
+    ansible-playbook create-user-centbb.yml --syntax-check
+
+    ansible-playbook create-user-centbb.yml
+
+
+**PLAYBOOK 3
+
+    openssl passwd -6 1234                                                                                          .....kreiramo kriptovan password za cent1
+    $6$NXTph6srFNx9tSVU$sMexfh.UqZDe6YFfx2nbRP..yxsSA.ShnpP6qaUIg.LbUjvmbPOpCy7a4H0q2Nit3QtLaSLLpp8X5L4bCAjur0
+
+    openssl passwd -6 abcd                                                                                          .....kreiramo kriptovan password za cent2
+    $6$Z3vfYNm/1BAWY1J0$g1HP1hStPYJWXKv8qqZHsF9CVRptUaw7Zxzn7lmwYrU8he75AAehQhOtPYHvWBuCtVlWcAnuITpEOKNW5Llzq1
+
+    openssl passwd -6 1111                                                                                          .....kreiramo kriptovan password za cent3
+    $6$Jd1VxozcrVT8KiiY$8iqL/btufdbsZC.tEXyB.19UujE35t8to5qF5SSCpnwW36wu6GrJTIHfr1y1Y6bH7GKVVbgyhX/RfYGvyzIRx/
+
+    cd lab-ansible
+
+    vim new-users.yml                                                           .....izrađujemo playbook fajl kojim kreiramo korisnike cent1, cent2 i cent3       
+       ---                                                                           dodeljujemo im različite passworde, javne ključeve sa master mašine,  
+       - hosts: &quot;privatelab&quot;                                                         određujemo im grupe i menjamo /etc/sudoers fajl dodavanjem linije kojom
+         become: yes                                                                 menjamo privilegije članova admin grupe usera
+         become_method: sudo
+         connection: &quot;local&quot;
+         vars:
+           users:
+           - username: &quot;cent1&quot;
+             groups: &quot;apache&quot;
+             password: $6$NXTph6srFNx9tSVU$sMexfh.UqZDe6YFfx2nbRP..yxsSA.ShnpP6qaUIg.LbUjvmbPOpCy7a4H0q2Nit3QtLaSLLpp8X5L4bCAjur0 
+           - username: &quot;cent2&quot;
+             groups: &quot;wheel&quot;
+             password: $6$Z3vfYNm/1BAWY1J0$g1HP1hStPYJWXKv8qqZHsF9CVRptUaw7Zxzn7lmwYrU8he75AAehQhOtPYHvWBuCtVlWcAnuITpEOKNW5Llzq1
+           - username: &quot;cent3&quot;
+             groups: &quot;wheel,adm&quot;
+             password: $6$Jd1VxozcrVT8KiiY$8iqL/btufdbsZC.tEXyB.19UujE35t8to5qF5SSCpnwW36wu6GrJTIHfr1y1Y6bH7GKVVbgyhX/RfYGvyzIRx/      
+        tasks:
+        - name: &quot;Create user accounts&quot;
+          user:
+             name: &quot;{{ item.username }}&quot;
+             groups: &quot;{{ item.groups }}&quot;
+             generate_ssh_key: yes
+             ssh_key_bits: 2048
+             password: &quot;{{ item.password }}&quot;
+             update_password: always
+          with_items: &quot;{{ users }}&quot;
+        - name: &quot;Add authorized keys&quot;
+          authorized_key:
+             user: &quot;{{ item.username }}&quot;
+             key: &quot;{{ lookup(&#39;file&#39;, &#39;/home/user/.ssh/id_rsa.pub&#39;) }}&quot;
+          with_items: &quot;{{ users }}&quot;
+        - name: &quot;Allow admin users to sudo without a password&quot;
+          lineinfile:
+             dest: &quot;/etc/sudoers&quot; 
+             state: &quot;present&quot;
+             regexp: &quot;^%adm&quot;
+             line: &quot;%admin ALL=(ALL) NOPASSWD: ALL&quot;   
+
+
+
+**PLAYBOOK 4
+
+    vim remove-user.yml                                                         .....izrađujemo playbook fajl kojim brišemo korisnika cent3 sa svih mašina
+       ---
+       - hosts: &quot;privatelab&quot;
+         become: yes
+         become_method: sudo
+         vars:
+           remove_users:
+           - &quot;cent3&quot;
+         tasks:
+         - name: &quot;Remove user accounts in remove_users&quot;
+           user:
+             name: &quot;{{ item }}&quot;
+             state: &quot;absent&quot;
+           with_items: &quot;{{ remove_users }}&quot;
+
+
+
+
+**PLAYBOOK 5
+
+    vim new-pass.yml                                                  
+       ---                                                                            
+       - hosts: all                                                                  
+         become: &#39;yes&#39;
+         vars:
+           user:
+             - name: &quot;cent2&quot;
+               password: &quot;abcd&quot;
+         tasks:
+           - name: Change password for one user
+             user:
+               name: &quot;cent2&quot;
+               password: &quot;$6$D.tdp7Hqcjg4BHde$pWeKTRsS1FzyKJLYv62DJCtcUL36hwG5Llfet5uvvw/ktcglG/w0LmQ2w/GpB5wmM76ilBnyQPZkuTIeg5kD01&quot;
+               state: present
+             loop:
+               - &quot;{{ user}} &quot;
+</code></pre>
+</body></html>
